@@ -20,7 +20,7 @@ class MnistDataloader(object):
     def read_images_labels(self, images_filepath, labels_filepath):        
         labels = []
         with open(labels_filepath, 'rb') as file:
-            magic, size = struct.unpack(">II", file.read(8))
+            magic, size = struct.unpack(">II", file.read(8)) # Big Endian -> ">" ; Unsigned int "I" Size 4 (So II is a byte) ; Big Endian: 0x3ff => 03 ff 
             if magic != 2049:
                 raise ValueError('Magic number mismatch, expected 2049, got {}'.format(magic))
             labels = array("B", file.read())        
@@ -54,11 +54,11 @@ import matplotlib.pyplot as plt
 #
 # Set file paths based on added MNIST Datasets
 #
-input_path = 'DataSets\mnist'
-training_images_filepath = join(input_path, 'train-images-idx3-ubyte/train-images-idx3-ubyte')
-training_labels_filepath = join(input_path, 'train-labels-idx1-ubyte/train-labels-idx1-ubyte')
-test_images_filepath = join(input_path, 't10k-images-idx3-ubyte/t10k-images-idx3-ubyte')
-test_labels_filepath = join(input_path, 't10k-labels-idx1-ubyte/t10k-labels-idx1-ubyte')
+input_path = 'DataSets\\MNIST\\raw'
+training_images_filepath = join(input_path, 'train-images-idx3-ubyte')
+training_labels_filepath = join(input_path, 'train-labels-idx1-ubyte')
+test_images_filepath = join(input_path, 't10k-images-idx3-ubyte')
+test_labels_filepath = join(input_path, 't10k-labels-idx1-ubyte')
 
 #
 # Helper function to show a list of images with their relating titles
@@ -76,6 +76,7 @@ def show_images(images, title_texts):
         if (title_text != ''):
             plt.title(title_text, fontsize = 15);        
         index += 1
+    plt.show()
 
 #
 # Load MINST dataset
@@ -99,3 +100,4 @@ for i in range(0, 5):
     titles_2_show.append('test image [' + str(r) + '] = ' + str(y_test[r]))    
 
 show_images(images_2_show, titles_2_show)
+# Run in interactive window
