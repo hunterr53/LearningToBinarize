@@ -146,8 +146,9 @@ class BiRealNet(nn.Module):
     def __init__(self, block, layers, num_classes=1000, zero_init_residual=False):
         super(BiRealNet, self).__init__()
         self.inplanes = 64
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
-                               bias=False)
+        # self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
+        #                        bias=False)
+        self.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False) # want [256, 1, 28, 28]; (input channels, output channels)
         self.bn1 = nn.BatchNorm2d(64)
         self.nonlinear = nn.PReLU(64)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
