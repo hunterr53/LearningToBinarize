@@ -2,6 +2,7 @@ import os
 import sys
 import shutil
 import numpy as np
+import numpy
 import time, datetime
 import torch
 import random
@@ -35,7 +36,7 @@ parser.add_argument('--label_smooth', type=float, default=0.1, help='label smoot
 parser.add_argument('-j', '--workers', default=20, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 parser.add_argument('--print_interval', type=int, default=10, help='number of times to print')
-args = parser.parse_args()
+args, unknown = parser.parse_known_args()
 
 CLASSES = 10
 
