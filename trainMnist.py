@@ -148,23 +148,30 @@ def main():
         transforms.ToTensor(),
         normalize])
 
-    train_dataset = datasets.ImageFolder(
-        traindir,
-        transform=train_transforms)
+    # train_dataset = torchvision.datasets.ImageFolder(
+    #     traindir,
+    #     transform=train_transforms)
+    train_dataset = torchvision.datasets.MNIST(
+        root= args.data,
+        train=True,
+        download=True,
+        transform=transforms.ToTensor()
+    )
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True,
         num_workers=args.workers, pin_memory=True)
 
-    # load validation data
+    # load validation data    
+    val_dataset = torchvision.datasets.MNIST(
+        root= args.data,
+        train=False,
+        download=True,
+        transform=transforms.ToTensor()
+    )
+
     val_loader = torch.utils.data.DataLoader(
-        datasets.ImageFolder(valdir, transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            normalize,
-        ])),
-        batch_size=args.batch_size, shuffle=False,
+        val_dataset, batch_size=args.batch_size, shuffle=False,
         num_workers=args.workers, pin_memory=True)
 
     # train the model
