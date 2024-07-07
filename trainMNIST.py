@@ -2,6 +2,7 @@ import os
 import sys
 import shutil
 import numpy as np
+import numpy
 import time, datetime
 import torch
 import random
@@ -30,14 +31,14 @@ parser.add_argument('--learning_rate', type=float, default=0.1, help='init learn
 parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
 parser.add_argument('--weight_decay', type=float, default=0, help='weight decay')
 parser.add_argument('--save', type=str, default='./Results', help='path for saving trained models')
-parser.add_argument('--data', default='', metavar='DIR', help='path to dataset')
+parser.add_argument('--data', default="DataSets", metavar='DIR', help='path to dataset')
 parser.add_argument('--label_smooth', type=float, default=0.1, help='label smoothing')
 parser.add_argument('-j', '--workers', default=20, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 parser.add_argument('--print_interval', type=int, default=10, help='number of times to print')
-args = parser.parse_args()
+args, unknown = parser.parse_known_args()
 
-CLASSES = 1000
+CLASSES = 10
 
 # use_meta = 'MuitFC'
 use_meta = 'Conv'
@@ -53,7 +54,115 @@ fh = logging.FileHandler(os.path.join('log/log.txt'))
 fh.setFormatter(logging.Formatter(log_format))
 logging.getLogger().addHandler(fh)
 
-def main():
+def train(epoch, train_loader, model, model_teacher, criterion, optimizer, scheduler, meta_optim=None, meta_scheduler=None, criterion_meta=None ):
+    batch_time = AverageMeter('Time', ':6.3f')
+    data_time = AverageMeter('Data', ':6.3f')
+    losses = AverageMeter('Loss', ':.4e')
+    top1 = AverageMeter('Acc@1', ':6.2f')
+    top5 = AverageMeter('Acc@5', ':6.2f')
+
+    progress = ProgressMeter(
+        len(train_loader),
+        [batch_time, data_time, losses, top1, top5],
+        prefix="Epoch: [{}]".format(epoch))
+
+    model.train()
+    model_teacher.eval()
+    end = time.time()
+    scheduler.step()
+    if use_meta != 'NoMeta':
+        meta_scheduler.step()
+
+    for param_group in optimizer.param_groups:
+        cur_lr = param_group['lr']
+    if use_meta != 'NoMeta':
+        for param_group in meta_optim.param_groups:
+            metacur_lr = param_group['lr']
+        print('epoch: %d meta learning_rate: %e' % (epoch, metacur_lr ))
+    print('epoch: %d base learning_rate: %e' % (epoch, cur_lr))
+
+    for i, (images, target) in enumerate(train_loader):
+        data_time.update(time.time() - end)
+        images = images.cuda()
+        target = target.cuda()
+
+        # compute output y
+        logits = model(images)
+
+        logits_teacher = model_teacher(images).detach()
+        loss, _ = criterion(logits, logits_teacher, target)
+
+        # measure accuracy and record loss
+        prec1, prec5 = accuracy(logits, target, topk=(1, 5))
+        n = images.size(0)
+        losses.update(loss.item(), n)   #accumulated loss
+        top1.update(prec1.item(), n)
+        top5.update(prec5.item(), n)
+
+        # compute gradient and do SGD step
+        optimizer.zero_grad()
+        if use_meta != 'NoMeta':
+            meta_optim.zero_grad()
+        loss.backward()
+        optimizer.step()
+        if use_meta != 'NoMeta':
+            meta_optim.step()
+
+        # measure elapsed time
+        batch_time.update(time.time() - end)
+        end = time.time()
+
+        if i % args.print_interval == 0:
+            progress.display(i)
+
+
+    return losses.avg, top1.avg, top5.avg
+
+
+def validate(epoch, val_loader, model, criterion, args, criterion_meta):
+    batch_time = AverageMeter('Time', ':6.3f')
+    losses = AverageMeter('Loss', ':.4e')
+    top1 = AverageMeter('Acc@1', ':6.2f')
+    top5 = AverageMeter('Acc@5', ':6.2f')
+    progress = ProgressMeter(
+        len(val_loader),
+        [batch_time, losses, top1, top5],
+        prefix='Test: ')
+
+    # switch to evaluation mode
+    model.eval()
+    with torch.no_grad():
+        end = time.time()
+        for i, (images, target) in enumerate(val_loader):
+            images = images.cuda()
+            target = target.cuda()
+
+            # compute output
+            logits = model(images)
+            loss = criterion(logits, target)
+            # lossB = criterion_meta(lossB)
+            # loss = loss + 0.05 * lossB
+
+            # measure accuracy and record loss
+            pred1, pred5 = accuracy(logits, target, topk=(1, 5))
+            n = images.size(0)
+            losses.update(loss.item(), n)
+            top1.update(pred1[0], n)
+            top5.update(pred5[0], n)
+
+            # measure elapsed time
+            batch_time.update(time.time() - end)
+            end = time.time()
+
+            if i % args.print_interval == 0:
+                progress.display(i)
+
+        print(' * acc@1 {top1.avg:.3f} acc@5 {top5.avg:.3f}'
+              .format(top1=top1, top5=top5))
+
+    return losses.avg, top1.avg, top5.avg
+
+if __name__ == '__main__':
     if not torch.cuda.is_available():
         sys.exit(1)
     start_t = time.time()
@@ -145,42 +254,30 @@ def main():
         transforms.ToTensor(),
         normalize])
 
-    train_dataset = datasets.ImageFolder(
-        traindir,
-        transform=train_transforms)
-
-    # train_dataset = torchvision.datasets.ImageNet(
-    #     root= args.data,
-    #     train=True,
-    #     download=True,
-    #     transform=train_transforms
-    # )
+    # train_dataset = torchvision.datasets.ImageFolder(
+    #     traindir,
+    #     transform=train_transforms)
+    train_dataset = torchvision.datasets.MNIST(
+        root= args.data,
+        train=True,
+        download=True,
+        transform=transforms.ToTensor()
+    )
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True,
         num_workers=args.workers, pin_memory=True)
 
-    val_transforms = transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            normalize,
-        ])
-    
-    val_dataset = torchvision.datasets.ImageNet(
-        root= "/DataSets/ImageNetTest/val",
+    # load validation data    
+    val_dataset = torchvision.datasets.MNIST(
+        root= args.data,
         train=False,
         download=True,
-        transform=val_transforms
+        transform=transforms.ToTensor()
     )
-    val_dataset = datasets.ImageFolder(
-        valdir,
-        transform=val_transforms)
-    
-    # load validation data
+
     val_loader = torch.utils.data.DataLoader(
-        val_dataset,
-        batch_size=args.batch_size, shuffle=False,
+        val_dataset, batch_size=args.batch_size, shuffle=False,
         num_workers=args.workers, pin_memory=True)
 
     # train the model
@@ -208,113 +305,5 @@ def main():
     print('total training time = {} hours. best acc: {}'.format(training_time, best_top1_acc))
 
 
-def train(epoch, train_loader, model, model_teacher, criterion, optimizer, scheduler, meta_optim=None, meta_scheduler=None, criterion_meta=None ):
-    batch_time = AverageMeter('Time', ':6.3f')
-    data_time = AverageMeter('Data', ':6.3f')
-    losses = AverageMeter('Loss', ':.4e')
-    top1 = AverageMeter('Acc@1', ':6.2f')
-    top5 = AverageMeter('Acc@5', ':6.2f')
-
-    progress = ProgressMeter(
-        len(train_loader),
-        [batch_time, data_time, losses, top1, top5],
-        prefix="Epoch: [{}]".format(epoch))
-
-    model.train()
-    model_teacher.eval()
-    end = time.time()
-    scheduler.step()
-    if use_meta != 'NoMeta':
-        meta_scheduler.step()
-
-    for param_group in optimizer.param_groups:
-        cur_lr = param_group['lr']
-    if use_meta != 'NoMeta':
-        for param_group in meta_optim.param_groups:
-            metacur_lr = param_group['lr']
-        print('epoch: %d meta learning_rate: %e' % (epoch, metacur_lr ))
-    print('epoch: %d base learning_rate: %e' % (epoch, cur_lr))
-
-    for i, (images, target) in enumerate(train_loader):
-        data_time.update(time.time() - end)
-        images = images.cuda()
-        target = target.cuda()
-
-        # compute outputy
-        logits = model(images)
-
-        logits_teacher = model_teacher(images).detach()
-        loss, _ = criterion(logits, logits_teacher, target)
-
-        # measure accuracy and record loss
-        prec1, prec5 = accuracy(logits, target, topk=(1, 5))
-        n = images.size(0)
-        losses.update(loss.item(), n)   #accumulated loss
-        top1.update(prec1.item(), n)
-        top5.update(prec5.item(), n)
-
-        # compute gradient and do SGD step
-        optimizer.zero_grad()
-        if use_meta != 'NoMeta':
-            meta_optim.zero_grad()
-        loss.backward()
-        optimizer.step()
-        if use_meta != 'NoMeta':
-            meta_optim.step()
-
-        # measure elapsed time
-        batch_time.update(time.time() - end)
-        end = time.time()
-
-        if i % args.print_interval == 0:
-            progress.display(i)
 
 
-    return losses.avg, top1.avg, top5.avg
-
-def validate(epoch, val_loader, model, criterion, args, criterion_meta):
-    batch_time = AverageMeter('Time', ':6.3f')
-    losses = AverageMeter('Loss', ':.4e')
-    top1 = AverageMeter('Acc@1', ':6.2f')
-    top5 = AverageMeter('Acc@5', ':6.2f')
-    progress = ProgressMeter(
-        len(val_loader),
-        [batch_time, losses, top1, top5],
-        prefix='Test: ')
-
-    # switch to evaluation mode
-    model.eval()
-    with torch.no_grad():
-        end = time.time()
-        for i, (images, target) in enumerate(val_loader):
-            images = images.cuda()
-            target = target.cuda()
-
-            # compute output
-            logits = model(images)
-            loss = criterion(logits, target)
-            # lossB = criterion_meta(lossB)
-            # loss = loss + 0.05 * lossB
-
-            # measure accuracy and record loss
-            pred1, pred5 = accuracy(logits, target, topk=(1, 5))
-            n = images.size(0)
-            losses.update(loss.item(), n)
-            top1.update(pred1[0], n)
-            top5.update(pred5[0], n)
-
-            # measure elapsed time
-            batch_time.update(time.time() - end)
-            end = time.time()
-
-            if i % args.print_interval == 0:
-                progress.display(i)
-
-        print(' * acc@1 {top1.avg:.3f} acc@5 {top5.avg:.3f}'
-              .format(top1=top1, top5=top5))
-
-    return losses.avg, top1.avg, top5.avg
-
-
-if __name__ == '__main__':
-    main()
