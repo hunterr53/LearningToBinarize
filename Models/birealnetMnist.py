@@ -148,17 +148,30 @@ class BiRealNet(nn.Module):
         self.inplanes = 64
         # self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
         #                        bias=False)
-        self.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False) # want [256, 1, 28, 28]; (input channels, output channels)
-        self.bn1 = nn.BatchNorm2d(64)
-        self.nonlinear = nn.PReLU(64)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(block, 64, layers[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(512 * block.expansion, num_classes)
+        # self.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False) # want [256, 1, 28, 28]; (input channels, output channels)
+        # self.bn1 = nn.BatchNorm2d(64)
+        # self.nonlinear = nn.PReLU(64)
+        # self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        # self.layer1 = self._make_layer(block, 64, layers[0])
+        # self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
+        # self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
+        # self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
+        # self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        # self.fc = nn.Linear(512 * block.expansion, num_classes)
+        # self.meta_net = MetaConv()
+
+        self.conv1 = nn.Conv2d(1, 10, kernel_size=5, stride=1, padding=1, bias=False) # True or False for BNN?
+        # size: np.floor( (28+2*1-5)/1 )+1 = 26/2 = 13 (/2 b/c maxpool)
+        self.bn1 = nn.BatchNorm2d(10)
+        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
+        self.nonlinear = nn.ReLU(10)
+
+        self.layer1 = self._make_layer(block, 10, layers[0]) # out should be 20X11X11 before pooling
+        self.maxpool2 = nn.MaxPool2d(kernel_size=2, stride=2, padding=0) 
+        # size: np.floor( (13+2*1-5)/1 )+1 = 11/2 = 5 (/2 b/c maxpool)
+        self.fc = nn.Linear(10*block.expansion, 10)
         self.meta_net = MetaConv()
+
 
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
@@ -188,12 +201,17 @@ class BiRealNet(nn.Module):
                 x = block(x, self.meta_net)
 
 
-        x = self.avgpool(x)
+        # x = self.avgpool(x)
+        x = self.maxpool2(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
 
         return x
 
+def mnistLearningNet(pretrained=False, **kwargs):
+    """Constructs a BiRealNet-18 model. """
+    model = BiRealNet(BasicBlock, [4], **kwargs)
+    return model
 
 def birealnet18(pretrained=False, **kwargs):
     """Constructs a BiRealNet-18 model. """
