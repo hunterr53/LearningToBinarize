@@ -215,9 +215,8 @@ def mnistLearningNet(pretrained=False, **kwargs):
 
 def birealnet18(pretrained=False, **kwargs):
     """Constructs a BiRealNet-18 model. """
-    model = BiRealNet(BasicBlock, [4, 4, 4, 4], **kwargs)
+    model = BiRealNet(BasicBlock, [4, 4, 4, 4], **kwargs) # these number indicate how many Convolutions in each layer for Resnet18
     return model
-
 
 def birealnet34(pretrained=False, **kwargs):
     """Constructs a BiRealNet-34 model. """
