@@ -11,16 +11,6 @@
             "program": "${file}",
             "args": ["--data", "DataSets/MNIST"],
             "console": "integratedTerminal"
-        },
-        // {
-        //     "type": "bashdb",
-        //     "request": "launch",
-        //     "name": "Bash-Debug of run.sh",
-        //     // "cwd": "${workspaceFolder}",
-        //     // "cwd": "/mnt/c/git/LearningToBinarize",
-        //     "program": "${workspaceFolder}/run.sh",
-        //     "args": [],
-        //     "terminalKind": "integrated"
-        // }
+        }
     ]
 }
