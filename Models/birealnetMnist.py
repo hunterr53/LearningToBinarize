@@ -145,7 +145,7 @@ class BiRealNet(nn.Module):
 
     def __init__(self, block, layers, num_classes=10, zero_init_residual=False):
         super(BiRealNet, self).__init__()
-        self.inplanes = 64
+        # self.inplanes = 64
         # self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
         #                        bias=False)
         # self.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False) # want [256, 1, 28, 28]; (input channels, output channels)
@@ -160,6 +160,7 @@ class BiRealNet(nn.Module):
         # self.fc = nn.Linear(512 * block.expansion, num_classes)
         # self.meta_net = MetaConv()
 
+        self.inplanes = 10
         self.conv1 = nn.Conv2d(1, 10, kernel_size=5, stride=1, padding=1, bias=False) # False because we're using batchnorm
         # size: np.floor( (28+2*1-5)/1 )+1 = 26/2 = 13 (/2 b/c maxpool)
         self.bn1 = nn.BatchNorm2d(10)
@@ -167,8 +168,8 @@ class BiRealNet(nn.Module):
         self.nonlinear = nn.PReLU(10)
 
         self.layer1 = self._make_layer(block, 10, layers[0]) # out should be 20X11X11 before pooling
-        # self.maxpool2 = nn.MaxPool2d(kernel_size=2, stride=2, padding=0) 
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.maxpool2 = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
+        # self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         # size: np.floor( (13+2*1-5)/1 )+1 = 11/2 = 5 (/2 b/c maxpool)
         self.fc = nn.Linear(10 * block.expansion, num_classes)
         self.meta_net = MetaConv()
@@ -197,7 +198,8 @@ class BiRealNet(nn.Module):
         x = self.nonlinear(x)
         x = self.maxpool(x)
 
-        for layer in [self.layer1, self.layer2, self.layer3, self.layer4]:
+        # for layer in [self.layer1, self.layer2, self.layer3, self.layer4]:
+        for layer in [self.layer1]:
             for block in layer:
                 x = block(x, self.meta_net)
 
@@ -209,14 +211,14 @@ class BiRealNet(nn.Module):
 
         return x
 
-def mnistLearningNet(pretrained=False, **kwargs):
+def mnistLearningNet(weights=False, **kwargs):
     """Constructs a BiRealNet-6 model. """
     model = BiRealNet(BasicBlock, [4], **kwargs)
     return model
 
 def birealnet18(pretrained=False, **kwargs):
     """Constructs a BiRealNet-18 model. """
-    model = BiRealNet(BasicBlock, [4, 4, 4, 4], **kwargs) # these number indicate how many Convolutions in each layer for Resnet18
+    model = BiRealNet(BasicBlock, [4, 4, 4, 4], **kwargs) # these numbers indicate how many Convolutions in each layer for Resnet18
     return model
 
 def birealnet34(pretrained=False, **kwargs):

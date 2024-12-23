@@ -20,8 +20,10 @@ from utils import *
 import utils_loss
 from torchvision import datasets, transforms
 from torch.autograd import Variable
+
 # from birealnet import birealnet18
 from Models import birealnetimagenet
+from Models import birealnetMnist
 
 
 parser = argparse.ArgumentParser("birealnet")
@@ -33,7 +35,7 @@ parser.add_argument('--weight_decay', type=float, default=0, help='weight decay'
 parser.add_argument('--save', type=str, default='./Results', help='path for saving trained models')
 parser.add_argument('--data', default="DataSets", metavar='DIR', help='path to dataset')
 parser.add_argument('--label_smooth', type=float, default=0.1, help='label smoothing')
-parser.add_argument('-j', '--workers', default=20, type=int, metavar='N',
+parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 parser.add_argument('--print_interval', type=int, default=10, help='number of times to print')
 args, unknown = parser.parse_known_args()
@@ -78,13 +80,13 @@ def train(epoch, train_loader, model, model_teacher, criterion, optimizer, sched
     if use_meta != 'NoMeta':
         for param_group in meta_optim.param_groups:
             metacur_lr = param_group['lr']
-        print('epoch: %d meta learning_rate: %e' % (epoch, metacur_lr ))
-    print('epoch: %d base learning_rate: %e' % (epoch, cur_lr))
+        print('epoch: %d meta learning_rate: %f' % (epoch, metacur_lr )) # originally %e
+    print('epoch: %d base learning_rate: %f' % (epoch, cur_lr)) # originally %e
 
     for i, (images, target) in enumerate(train_loader):
         data_time.update(time.time() - end)
-        images = images.cuda()
-        target = target.cuda()
+        # images = images.cuda()
+        # target = target.cuda()
 
         # compute output y
         logits = model(images)
@@ -134,8 +136,8 @@ def validate(epoch, val_loader, model, criterion, args, criterion_meta):
     with torch.no_grad():
         end = time.time()
         for i, (images, target) in enumerate(val_loader):
-            images = images.cuda()
-            target = target.cuda()
+            # images = images.cuda()
+            # target = target.cuda()
 
             # compute output
             logits = model(images)
@@ -164,23 +166,26 @@ def validate(epoch, val_loader, model, criterion, args, criterion_meta):
 
 if __name__ == '__main__':
     if not torch.cuda.is_available():
-        sys.exit(1)
+        print('no gpu device available')
+        # sys.exit(1)
     start_t = time.time()
 
-    cudnn.benchmark = True
-    cudnn.enabled=True
+    # cudnn.benchmark = True #CUDA
+    # cudnn.enabled=True 
     logging.info("args = %s", args)
 
     # load model
-    model = birealnetimagenet.birealnet18()
+    model = birealnetMnist.mnistLearningNet()
     logging.info(model)
-    model = nn.DataParallel(model).cuda()
+    # model = nn.DataParallel(model).cuda()
 
     # teacher model
-    model_teacher = torchvision.models.resnet18(pretrained=False)
-    model_teacher.load_state_dict(torch.load('./resnet18.pth'))
+    # model_teacher = torchvision.models.resnet18(pretrained=False)
+    model_teacher = torchvision.models.resnet18(weights=False)
+    # model_teacher.load_state_dict(torch.load('./resnet18.pth'))
+    model_teacher.load_state_dict(torch.load('./resnet18.pth', weights_only=False, map_location='cpu'))
     logging.info(model_teacher)
-    model_teacher = nn.DataParallel(model_teacher).cuda()
+    # model_teacher = nn.DataParallel(model_teacher).cuda()
     model_teacher.eval()
     # meta_met 
     meta_net_param = []
@@ -194,13 +199,15 @@ if __name__ == '__main__':
     meta_scheduler = torch.optim.lr_scheduler.MultiStepLR(meta_optimizer, [70, 90, 100, 110], gamma=0.1)
 
     criterion = nn.CrossEntropyLoss()
-    criterion = criterion.cuda()
+    # criterion = criterion.cuda()
     criterion_smooth = CrossEntropyLabelSmooth(CLASSES, args.label_smooth)
-    criterion_smooth = criterion_smooth.cuda()
+    # criterion_smooth = criterion_smooth.cuda()
 
-    criterion_kd = utils_loss.DistillationLoss().cuda()
+    # criterion_kd = utils_loss.DistillationLoss().cuda()
+    criterion_kd = utils_loss.DistillationLoss() # added
 
-    criterion_meta = Metaloss().cuda()
+    # criterion_meta = Metaloss().cuda()
+    criterion_meta = Metaloss() # added
 
     all_parameters = model.parameters()
     weight_parameters = []
@@ -248,7 +255,7 @@ if __name__ == '__main__':
     crop_scale = 0.08
     lighting_param = 0.1
     train_transforms = transforms.Compose([
-        transforms.RandomResizedCrop(224, scale=(crop_scale, 1.0)),
+        # transforms.RandomResizedCrop(224, scale=(crop_scale, 1.0)),
         Lighting(lighting_param),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
