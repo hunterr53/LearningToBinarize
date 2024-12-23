@@ -1,3 +1,4 @@
+import logging
 import torch
 import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
@@ -100,7 +101,6 @@ class HardBinaryConvMeta(nn.Module):
         real_weights = meta_net(real_weights_center)
         real_weights = real_weights.view(self.shape)
 
-
         scaling_factor = torch.mean(torch.mean(torch.mean(abs(real_weights_center),dim=3,keepdim=True),dim=2,keepdim=True),dim=1,keepdim=True)
         binary_weights_no_grad = scaling_factor * torch.sign(real_weights)
         # binary_weights_no_grad = torch.sign(real_weights)
@@ -108,7 +108,6 @@ class HardBinaryConvMeta(nn.Module):
         cliped_weights = torch.clamp(real_weights, -1.0, 1.0)
         binary_weights = binary_weights_no_grad.detach() - cliped_weights.detach() + cliped_weights
         y = F.conv2d(x, binary_weights, stride=self.stride, padding=self.padding)
-
 
         return y
 
@@ -207,6 +206,9 @@ class BiRealNet(nn.Module):
         # x = self.avgpool(x)
         x = self.maxpool2(x)
         x = x.view(x.size(0), -1)
+
+        logging.DEBUG(x)
+
         x = self.fc(x)
 
         return x

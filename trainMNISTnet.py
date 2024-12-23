@@ -14,6 +14,7 @@ import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torch.utils.data.distributed
 import torchvision
+import onnx
 
 #sys.path.append("../")
 from utils import *
@@ -27,7 +28,7 @@ from Models import birealnetMnist
 
 
 parser = argparse.ArgumentParser("birealnet")
-parser.add_argument('--batch_size', type=int, default=256, help='batch size')
+parser.add_argument('--batch_size', type=int, default=64, help='batch size')
 parser.add_argument('--epochs', type=int, default=120, help='num of training epochs')
 parser.add_argument('--learning_rate', type=float, default=0.1, help='init learning rate')
 parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
@@ -49,12 +50,12 @@ use_meta = 'Conv'
 if not os.path.exists('log'):
     os.mkdir('log')
 
-log_format = '%(asctime)s %(message)s'
-logging.basicConfig(stream=sys.stdout, level=logging.INFO,
-    format=log_format, datefmt='%m/%d %I:%M:%S %p')
-fh = logging.FileHandler(os.path.join('log/log.txt'))
-fh.setFormatter(logging.Formatter(log_format))
-logging.getLogger().addHandler(fh)
+fd = os.open('log/debug.txt', os.O_RDWR|os.O_CREAT)
+
+# log_format = '%(asctime)s %(message)s'
+log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+logging.basicConfig(filename='log/log.txt', filemode='a', 
+                    level=logging.INFO, format=log_format, datefmt='%m/%d %I:%M:%S %p')
 
 def train(epoch, train_loader, model, model_teacher, criterion, optimizer, scheduler, meta_optim=None, meta_scheduler=None, criterion_meta=None ):
     batch_time = AverageMeter('Time', ':6.3f')
@@ -171,12 +172,18 @@ if __name__ == '__main__':
     start_t = time.time()
 
     # cudnn.benchmark = True #CUDA
-    # cudnn.enabled=True 
+    # cudnn.enabled=True
     logging.info("args = %s", args)
 
     # load model
     model = birealnetMnist.mnistLearningNet()
     logging.info(model)
+    
+    torch.save(model, 'testArch.pth')
+    # model_scripted = torch.jit.script(model) # Export to TorchScript
+    # model_scripted.save('model_scripted.pt') # Save
+    # torch.onnx.export(model, "testArch.onnx", verbose=False, export_params=True)
+
     # model = nn.DataParallel(model).cuda()
 
     # teacher model
@@ -311,6 +318,6 @@ if __name__ == '__main__':
     training_time = (time.time() - start_t) / 3600
     print('total training time = {} hours. best acc: {}'.format(training_time, best_top1_acc))
 
-
-
+    
+    os.close(fd)
 
